@@ -55,7 +55,7 @@ const initDatabase = async () => {
       )
     `);
 
-    // Products table
+    // Products table - ДОБАВЛЕНО ПОЛЕ is_active
     await pool.query(`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
@@ -63,6 +63,7 @@ const initDatabase = async () => {
         description TEXT,
         price DECIMAL(10,2) NOT NULL,
         stock_quantity INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -93,7 +94,7 @@ const initDatabase = async () => {
       )
     `);
 
-    // Order items table - ИСПРАВЛЕНО!
+    // Order items table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS order_items (
         id SERIAL PRIMARY KEY,
@@ -124,7 +125,9 @@ const initDatabase = async () => {
         courier_id INTEGER REFERENCES users(id),
         product_id INTEGER REFERENCES products(id),
         requested_quantity INTEGER NOT NULL CHECK (requested_quantity > 0),
+        approved_quantity INTEGER,
         status VARCHAR(20) DEFAULT 'pending',
+        notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -153,10 +156,10 @@ const initDatabase = async () => {
     const productsExist = await pool.query('SELECT id FROM products LIMIT 1');
     if (productsExist.rows.length === 0) {
       await pool.query(`
-        INSERT INTO products (name, description, price, stock_quantity) VALUES 
-        ('Neko-Active', 'Активные салфетки-души для быстрого освежения', 500.00, 1000),
-        ('Neko-Clinic', 'Клинические салфетки-души с антибактериальным эффектом', 2000.00, 500),
-        ('Neko-Grill', 'Салфетки-души для очистки после приготовления на гриле', 600.00, 800)
+        INSERT INTO products (name, description, price, stock_quantity, is_active) VALUES 
+        ('Neko-Active', 'Активные салфетки-души для быстрого освежения', 500.00, 1000, true),
+        ('Neko-Clinic', 'Клинические салфетки-души с антибактериальным эффектом', 2000.00, 500, true),
+        ('Neko-Grill', 'Салфетки-души для очистки после приготовления на гриле', 600.00, 800, true)
       `);
       console.log('Sample products added');
     }
@@ -252,10 +255,31 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// Products routes
+// Products routes - ИСПРАВЛЕНО! Теперь фильтрует товары для обычных пользователей
 app.get('/api/products', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM products ORDER BY name');
+    // Для обычных пользователей показываем только активные товары с остатком > 0
+    // Для админов и операторов показываем все товары
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    let showInactive = false;
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        showInactive = decoded.role === 'admin' || decoded.role === 'operator';
+      } catch (err) {
+        // Токен невалидный, показываем только активные
+      }
+    }
+    
+    let query = 'SELECT * FROM products';
+    if (!showInactive) {
+      query += ' WHERE is_active = true AND stock_quantity > 0';
+    }
+    query += ' ORDER BY name';
+    
+    const result = await pool.query(query);
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -349,6 +373,37 @@ app.patch('/api/products/:id/stock', authenticateToken, async (req, res) => {
   }
 });
 
+// Скрытие/активация товара - НОВОЕ!
+app.patch('/api/products/:id/toggle', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin' && req.user.role !== 'operator') {
+      return res.status(403).json({ error: 'Недостаточно прав' });
+    }
+
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      'UPDATE products SET is_active = NOT is_active WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Товар не найден' });
+    }
+
+    const product = result.rows[0];
+    const status = product.is_active ? 'активирован' : 'скрыт';
+    
+    res.json({ 
+      message: `Товар ${status}`, 
+      product: product 
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
 // Удаление товара
 app.delete('/api/products/:id', authenticateToken, async (req, res) => {
   try {
@@ -409,7 +464,7 @@ app.post('/api/tents', authenticateToken, async (req, res) => {
   }
 });
 
-// Orders routes - ИСПРАВЛЕНО!
+// Orders routes - ИСПРАВЛЕНО! Теперь курьеры видят все доступные заказы
 app.get('/api/orders', authenticateToken, async (req, res) => {
   try {
     let query = `
@@ -433,8 +488,9 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
       LEFT JOIN products p ON oi.product_id = p.id
     `;
 
+    // ИСПРАВЛЕНО: Курьеры видят все заказы (новые + свои), админы видят все
     if (req.user.role === 'courier') {
-      query += ' WHERE o.courier_id = $1';
+      query += ` WHERE o.courier_id IS NULL OR o.courier_id = $1`;
     }
 
     query += ' GROUP BY o.id, t.tent_number, u.username ORDER BY o.created_at DESC';
@@ -451,56 +507,90 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
+  const client = await pool.connect();
+  
   try {
+    await client.query('BEGIN');
+    
     const { tent_number, items, payment_method } = req.body;
     
     // Find tent
-    const tentResult = await pool.query('SELECT id FROM tents WHERE tent_number = $1', [tent_number]);
+    const tentResult = await client.query('SELECT id FROM tents WHERE tent_number = $1', [tent_number]);
     
     if (tentResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Палатка не найдена' });
     }
 
     const tent_id = tentResult.rows[0].id;
     
-    // Calculate total
+    // Проверяем наличие товаров и рассчитываем общую стоимость
     let total_amount = 0;
+    const stockErrors = [];
+    
     for (const item of items) {
-      const productResult = await pool.query('SELECT price FROM products WHERE id = $1', [item.product_id]);
-      if (productResult.rows.length > 0) {
-        total_amount += productResult.rows[0].price * item.quantity;
+      const productResult = await client.query(
+        'SELECT id, name, price, stock_quantity FROM products WHERE id = $1', 
+        [item.product_id]
+      );
+      
+      if (productResult.rows.length === 0) {
+        stockErrors.push(`Товар с ID ${item.product_id} не найден`);
+        continue;
       }
+      
+      const product = productResult.rows[0];
+      
+      if (product.stock_quantity < item.quantity) {
+        stockErrors.push(`Недостаточно товара "${product.name}". В наличии: ${product.stock_quantity}, запрошено: ${item.quantity}`);
+        continue;
+      }
+      
+      total_amount += product.price * item.quantity;
+    }
+    
+    if (stockErrors.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: stockErrors.join('\n') });
     }
 
     // Create order
-    const orderResult = await pool.query(
+    const orderResult = await client.query(
       'INSERT INTO orders (tent_id, total_amount, payment_method) VALUES ($1, $2, $3) RETURNING *',
       [tent_id, total_amount, payment_method]
     );
 
     const order = orderResult.rows[0];
 
-    // Add order items - ИСПРАВЛЕНО!
+    // Add order items and update stock
     for (const item of items) {
-      const productResult = await pool.query('SELECT price FROM products WHERE id = $1', [item.product_id]);
+      const productResult = await client.query('SELECT price FROM products WHERE id = $1', [item.product_id]);
       if (productResult.rows.length > 0) {
-        await pool.query(
+        await client.query(
           'INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES ($1, $2, $3, $4)',
           [order.id, item.product_id, item.quantity, productResult.rows[0].price]
         );
         
         // Update stock
-        await pool.query(
+        await client.query(
           'UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2',
           [item.quantity, item.product_id]
         );
       }
     }
 
-    res.status(201).json({ ...order, payment_url: '/api/payment/' + order.id });
+    await client.query('COMMIT');
+
+    res.status(201).json({ 
+      ...order, 
+      payment_url: '/api/payment/' + order.id 
+    });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Order creation error:', err);
     res.status(500).json({ error: 'Ошибка сервера' });
+  } finally {
+    client.release();
   }
 });
 
@@ -530,7 +620,7 @@ app.put('/api/orders/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
-// Messages routes
+// Messages routes - ИСПРАВЛЕНО! Сообщения в правильном порядке
 app.get('/api/messages', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -541,7 +631,7 @@ app.get('/api/messages', authenticateToken, async (req, res) => {
       JOIN users s ON m.sender_id = s.id
       LEFT JOIN users r ON m.receiver_id = r.id
       WHERE m.sender_id = $1 OR m.receiver_id = $1 OR m.receiver_id IS NULL
-      ORDER BY m.created_at DESC
+      ORDER BY m.created_at ASC
     `, [req.user.id]);
 
     res.json(result.rows);
@@ -555,9 +645,16 @@ app.post('/api/messages', authenticateToken, async (req, res) => {
   try {
     const { message, receiver_id } = req.body;
     
+    // Если админ/оператор не указал получателя, отправляем всем курьерам
+    let targetReceiverId = receiver_id;
+    
+    if ((req.user.role === 'admin' || req.user.role === 'operator') && !receiver_id) {
+      targetReceiverId = null; // null означает "для всех курьеров"
+    }
+    
     const result = await pool.query(
       'INSERT INTO messages (sender_id, receiver_id, message) VALUES ($1, $2, $3) RETURNING *',
-      [req.user.id, receiver_id, message]
+      [req.user.id, targetReceiverId, message]
     );
 
     res.status(201).json(result.rows[0]);

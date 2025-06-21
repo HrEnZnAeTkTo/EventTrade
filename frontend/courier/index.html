@@ -410,7 +410,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
         const API_BASE = window.location.protocol + '//' + window.location.hostname + ':3000/api';
 
@@ -625,7 +625,7 @@
             return (
                 <div className="app">
                     <div className="header">
-                        <h1>🚚 Курьер</h1>
+                        <h1>Курьер</h1>
                         <div className="user-info">
                             Добрый день, {user?.username}
                         </div>
@@ -740,7 +740,7 @@
                         
                         <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
                             Тестовый аккаунт:<br />
-                            Логин: admin<br />
+                            Логин: courier1<br />
                             Пароль: admin123
                         </div>
                     </form>
@@ -945,6 +945,12 @@
 
         function ChatTab({ messages, onSendMessage }) {
             const [newMessage, setNewMessage] = useState('');
+            const messagesEndRef = useRef(null);
+
+            // Автоскролл к последнему сообщению
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages]);
 
             const handleSendMessage = async (e) => {
                 e.preventDefault();
@@ -974,17 +980,20 @@
                                 <p>Нет сообщений</p>
                             </div>
                         ) : (
-                            messages.map(message => (
-                                <div 
-                                    key={message.id} 
-                                    className={`message ${message.sender_id ? 'sent' : 'received'}`}
-                                >
-                                    <div>{message.message}</div>
-                                    <div className="message-time">
-                                        {formatMessageTime(message.created_at)}
+                            <>
+                                {messages.map(message => (
+                                    <div 
+                                        key={message.id} 
+                                        className={`message ${message.sender_id ? 'sent' : 'received'}`}
+                                    >
+                                        <div>{message.message}</div>
+                                        <div className="message-time">
+                                            {message.sender_name} • {formatMessageTime(message.created_at)}
+                                        </div>
                                     </div>
-                                </div>
-                            ))
+                                ))}
+                                <div ref={messagesEndRef} />
+                            </>
                         )}
                     </div>
                     
