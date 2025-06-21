@@ -437,12 +437,49 @@
             padding: 10px;
             border-radius: 8px;
             background: #f8f9fa;
+            position: relative;
+        }
+
+        .chat-message.reply {
+            border-left: 4px solid #667eea;
+            margin-left: 20px;
         }
 
         .message-header {
             font-size: 12px;
             color: #666;
             margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .message-action {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .message-action:hover {
+            background: #e2e8f0;
+        }
+
+        .reply-to {
+            background: #e3f2fd;
+            padding: 5px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #1976d2;
         }
 
         .chat-input {
@@ -455,6 +492,23 @@
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 6px;
+        }
+
+        .reply-preview {
+            background: #f0f8ff;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            border-left: 3px solid #667eea;
+        }
+
+        .reply-cancel {
+            float: right;
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
         }
 
         @media (max-width: 768px) {
@@ -677,7 +731,9 @@
                 inDelivery: orders.filter(o => o.status === 'in_delivery').length,
                 completedOrders: orders.filter(o => o.status === 'completed').length,
                 totalRevenue: orders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0),
-                lowStockProducts: products.filter(p => p.stock_quantity < 50).length
+                lowStockProducts: products.filter(p => p.stock_quantity < 50).length,
+                totalTents: tents.length,
+                activeTents: tents.filter(t => t.is_active !== false).length
             };
 
             return (
@@ -728,6 +784,9 @@
                                 <TentsSection 
                                     tents={tents}
                                     onRefresh={fetchTents}
+                                    fetchWithAuth={fetchWithAuth}
+                                    setError={setError}
+                                    setSuccess={setSuccess}
                                 />
                             )}
                             
@@ -738,6 +797,7 @@
                                     fetchWithAuth={fetchWithAuth}
                                     setError={setError}
                                     setSuccess={setSuccess}
+                                    currentUser={user}
                                 />
                             )}
                             
@@ -932,9 +992,9 @@
                         </div>
                         
                         <div className="stat-card">
-                            <div className="stat-icon">⚠️</div>
-                            <div className="stat-number">{stats.lowStockProducts}</div>
-                            <div className="stat-label">Мало товара</div>
+                            <div className="stat-icon">🏕️</div>
+                            <div className="stat-number">{stats.activeTents} / {stats.totalTents}</div>
+                            <div className="stat-label">Активные палатки</div>
                         </div>
                     </div>
 
@@ -1309,7 +1369,7 @@
                         </div>
                     </div>
 
-                    {/* Модальное окно добавления товара */}
+                    {/* Modals for products (same as before) */}
                     {showAddModal && (
                         <ProductModal
                             title="Добавить новый товар"
@@ -1319,7 +1379,6 @@
                         />
                     )}
 
-                    {/* Модальное окно редактирования товара */}
                     {showEditModal && selectedProduct && (
                         <ProductModal
                             title="Редактировать товар"
@@ -1330,7 +1389,6 @@
                         />
                     )}
 
-                    {/* Модальное окно управления складом */}
                     {showStockModal && selectedProduct && (
                         <StockModal
                             product={selectedProduct}
@@ -1343,52 +1401,234 @@
             );
         }
 
-        function TentsSection({ tents, onRefresh }) {
+        // Enhanced TentsSection with full CRUD
+        function TentsSection({ tents, onRefresh, fetchWithAuth, setError, setSuccess }) {
+            const [showAddModal, setShowAddModal] = useState(false);
+            const [showEditModal, setShowEditModal] = useState(false);
+            const [selectedTent, setSelectedTent] = useState(null);
+            const [loading, setLoading] = useState(false);
+
+            const addTent = async (tentData) => {
+                try {
+                    setLoading(true);
+                    const response = await fetchWithAuth(`${API_BASE}/tents`, {
+                        method: 'POST',
+                        body: JSON.stringify(tentData)
+                    });
+
+                    if (response && response.ok) {
+                        setSuccess('Палатка добавлена успешно');
+                        onRefresh();
+                        setShowAddModal(false);
+                    } else {
+                        const data = await response.json();
+                        setError(data.error || 'Ошибка при добавлении палатки');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const updateTent = async (tentData) => {
+                try {
+                    setLoading(true);
+                    const response = await fetchWithAuth(`${API_BASE}/tents/${selectedTent.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify(tentData)
+                    });
+
+                    if (response && response.ok) {
+                        setSuccess('Палатка обновлена успешно');
+                        onRefresh();
+                        setShowEditModal(false);
+                    } else {
+                        const data = await response.json();
+                        setError(data.error || 'Ошибка при обновлении палатки');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const toggleTentStatus = async (tentId) => {
+                try {
+                    setLoading(true);
+                    const response = await fetchWithAuth(`${API_BASE}/tents/${tentId}/toggle`, {
+                        method: 'PATCH'
+                    });
+
+                    if (response && response.ok) {
+                        const data = await response.json();
+                        setSuccess(data.message);
+                        onRefresh();
+                    } else {
+                        const data = await response.json();
+                        setError(data.error || 'Ошибка при изменении статуса палатки');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const deleteTent = async (tentId) => {
+                if (!confirm('Вы уверены, что хотите удалить эту палатку? Убедитесь, что у неё нет активных заказов.')) {
+                    return;
+                }
+                
+                try {
+                    setLoading(true);
+                    const response = await fetchWithAuth(`${API_BASE}/tents/${tentId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response && response.ok) {
+                        setSuccess('Палатка удалена');
+                        onRefresh();
+                    } else {
+                        const data = await response.json();
+                        setError(data.error || 'Ошибка при удалении палатки');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
             return (
-                <div className="card">
-                    <div className="card-header">
-                        <div className="card-title">Палатки</div>
-                        <button className="btn" onClick={onRefresh} style={{ marginLeft: '7px' }}>
-                            Обновить
-                        </button>
-                    </div>
-                    
-                    <div className="card-content">
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th>Номер палатки</th>
-                                    <th>Описание локации</th>
-                                    <th>QR-код</th>
-                                    <th>Дата создания</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {tents.map(tent => (
-                                    <tr key={tent.id}>
-                                        <td><strong>{tent.tent_number}</strong></td>
-                                        <td>{tent.location_description || '—'}</td>
-                                        <td>
-                                            {tent.qr_code && (
-                                                <img 
-                                                    src={tent.qr_code} 
-                                                    alt="QR код" 
-                                                    style={{ width: '50px', height: '50px' }}
-                                                />
-                                            )}
-                                        </td>
-                                        <td>{new Date(tent.created_at).toLocaleDateString('ru-RU')}</td>
+                <div>
+                    <div className="card">
+                        <div className="card-header">
+                            <div className="card-title">Палатки фестиваля</div>
+                            <div>
+                                <button className="btn" onClick={() => setShowAddModal(true)} style={{ marginLeft: '10px' }}>
+                                    Добавить палатку
+                                </button>
+                                <button className="btn" onClick={onRefresh} style={{ marginLeft: '10px' }}>
+                                    Обновить
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="card-content">
+                            <table className="table">
+                                <thead>
+                                    <tr>
+                                        <th>Номер палатки</th>
+                                        <th>Зона</th>
+                                        <th>Описание локации</th>
+                                        <th>Вместимость</th>
+                                        <th>Контакт</th>
+                                        <th>QR-код</th>
+                                        <th>Статус</th>
+                                        <th>Действия</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {tents.map(tent => (
+                                        <tr key={tent.id} style={{ 
+                                            opacity: tent.is_active === false ? 0.6 : 1 
+                                        }}>
+                                            <td><strong>{tent.tent_number}</strong></td>
+                                            <td>{tent.zone || '—'}</td>
+                                            <td>{tent.location_description || '—'}</td>
+                                            <td>{tent.capacity || 4} чел.</td>
+                                            <td>
+                                                {tent.contact_name && (
+                                                    <div style={{ fontSize: '12px' }}>
+                                                        <div>{tent.contact_name}</div>
+                                                        {tent.contact_phone && <div>{tent.contact_phone}</div>}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td>
+                                                {tent.qr_code && (
+                                                    <img 
+                                                        src={tent.qr_code} 
+                                                        alt="QR код" 
+                                                        style={{ width: '40px', height: '40px' }}
+                                                    />
+                                                )}
+                                            </td>
+                                            <td>
+                                                {tent.is_active === false ? (
+                                                    <span className="badge" style={{ background: '#fed7d7', color: '#9b2c2c' }}>
+                                                        Скрыта
+                                                    </span>
+                                                ) : (
+                                                    <span className="badge badge-completed">
+                                                        Активна
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                                                    <button 
+                                                        className="btn btn-sm"
+                                                        onClick={() => {
+                                                            setSelectedTent(tent);
+                                                            setShowEditModal(true);
+                                                        }}
+                                                    >
+                                                        Изменить
+                                                    </button>
+                                                    <button 
+                                                        className={`btn btn-sm ${tent.is_active === false ? 'btn-success' : 'btn-secondary'}`}
+                                                        onClick={() => toggleTentStatus(tent.id)}
+                                                        disabled={loading}
+                                                    >
+                                                        {tent.is_active === false ? 'Активировать' : 'Скрыть'}
+                                                    </button>
+                                                    <button 
+                                                        className="btn btn-sm btn-danger"
+                                                        onClick={() => deleteTent(tent.id)}
+                                                        disabled={loading}
+                                                        title="Удалить палатку"
+                                                    >
+                                                        Удалить
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
+
+                    {/* Tent Modals */}
+                    {showAddModal && (
+                        <TentModal
+                            title="Добавить новую палатку"
+                            onSave={addTent}
+                            onClose={() => setShowAddModal(false)}
+                            loading={loading}
+                        />
+                    )}
+
+                    {showEditModal && selectedTent && (
+                        <TentModal
+                            title="Редактировать палатку"
+                            tent={selectedTent}
+                            onSave={updateTent}
+                            onClose={() => setShowEditModal(false)}
+                            loading={loading}
+                        />
+                    )}
                 </div>
             );
         }
 
-        function ChatSection({ messages, onRefresh, fetchWithAuth, setError, setSuccess }) {
+        // Enhanced ChatSection with replies and deletion
+        function ChatSection({ messages, onRefresh, fetchWithAuth, setError, setSuccess, currentUser }) {
             const [newMessage, setNewMessage] = useState('');
+            const [replyTo, setReplyTo] = useState(null);
             const [loading, setLoading] = useState(false);
 
             const handleSendMessage = async (e) => {
@@ -1401,12 +1641,14 @@
                         method: 'POST',
                         body: JSON.stringify({ 
                             message: newMessage.trim(),
-                            receiver_id: null // null означает "для всех курьеров"
+                            receiver_id: null,
+                            reply_to_id: replyTo?.id || null
                         })
                     });
 
                     if (response && response.ok) {
                         setNewMessage('');
+                        setReplyTo(null);
                         onRefresh();
                     } else {
                         setError('Ошибка отправки сообщения');
@@ -1416,6 +1658,35 @@
                 } finally {
                     setLoading(false);
                 }
+            };
+
+            const handleDeleteMessage = async (messageId) => {
+                if (!confirm('Удалить это сообщение?')) return;
+                
+                try {
+                    const response = await fetchWithAuth(`${API_BASE}/messages/${messageId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response && response.ok) {
+                        onRefresh();
+                    } else {
+                        const data = await response.json();
+                        setError(data.error || 'Ошибка удаления сообщения');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
+                }
+            };
+
+            const handleReply = (message) => {
+                setReplyTo(message);
+            };
+
+            const canDeleteMessage = (message) => {
+                return currentUser?.role === 'admin' || 
+                       currentUser?.role === 'operator' ||
+                       message.sender_id === currentUser?.id;
             };
 
             return (
@@ -1434,10 +1705,39 @@
                                     <p>Сообщений пока нет</p>
                                 ) : (
                                     messages.map(message => (
-                                        <div key={message.id} className="chat-message">
+                                        <div 
+                                            key={message.id} 
+                                            className={`chat-message ${message.reply_to_id ? 'reply' : ''}`}
+                                            onDoubleClick={() => handleReply(message)}
+                                        >
+                                            {message.reply_to_message && (
+                                                <div className="reply-to">
+                                                    ↳ Ответ на: {message.reply_to_sender}: {message.reply_to_message.substring(0, 50)}...
+                                                </div>
+                                            )}
                                             <div className="message-header">
-                                                <strong>{message.sender_name}</strong> • {' '}
-                                                {new Date(message.created_at).toLocaleString('ru-RU')}
+                                                <span>
+                                                    <strong>{message.sender_name}</strong> • {' '}
+                                                    {new Date(message.created_at).toLocaleString('ru-RU')}
+                                                </span>
+                                                <div className="message-actions">
+                                                    <button 
+                                                        className="message-action"
+                                                        onClick={() => handleReply(message)}
+                                                        title="Ответить"
+                                                    >
+                                                        ↩️
+                                                    </button>
+                                                    {canDeleteMessage(message) && (
+                                                        <button 
+                                                            className="message-action"
+                                                            onClick={() => handleDeleteMessage(message.id)}
+                                                            title="Удалить"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div>{message.message}</div>
                                         </div>
@@ -1445,12 +1745,24 @@
                                 )}
                             </div>
                             
+                            {replyTo && (
+                                <div className="reply-preview">
+                                    <button 
+                                        className="reply-cancel"
+                                        onClick={() => setReplyTo(null)}
+                                    >
+                                        ✕
+                                    </button>
+                                    <strong>Ответ на:</strong> {replyTo.sender_name}: {replyTo.message.substring(0, 100)}...
+                                </div>
+                            )}
+                            
                             <form className="chat-input" onSubmit={handleSendMessage}>
                                 <input
                                     type="text"
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
-                                    placeholder="Написать сообщение всем курьерам..."
+                                    placeholder={replyTo ? "Напишите ответ..." : "Написать сообщение всем курьерам..."}
                                     maxLength={500}
                                     disabled={loading}
                                 />
@@ -1600,7 +1912,7 @@
             );
         }
 
-        // Модальное окно для редактирования товара
+        // Modal Components
         function ProductModal({ title, product, onSave, onClose, loading }) {
             const [formData, setFormData] = useState({
                 name: product?.name || '',
@@ -1692,7 +2004,127 @@
             );
         }
 
-        // Модальное окно для управления складом
+        function TentModal({ title, tent, onSave, onClose, loading }) {
+            const [formData, setFormData] = useState({
+                tent_number: tent?.tent_number || '',
+                location_description: tent?.location_description || '',
+                zone: tent?.zone || '',
+                capacity: tent?.capacity || 4,
+                contact_name: tent?.contact_name || '',
+                contact_phone: tent?.contact_phone || '',
+                notes: tent?.notes || ''
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (formData.tent_number) {
+                    onSave({
+                        ...formData,
+                        capacity: parseInt(formData.capacity) || 4
+                    });
+                }
+            };
+
+            return (
+                <div className="modal">
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <div className="modal-title">{title}</div>
+                            <button className="modal-close" onClick={onClose}>✕</button>
+                        </div>
+                        <div className="modal-body">
+                            <form onSubmit={handleSubmit}>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label>Номер палатки *</label>
+                                        <input
+                                            type="text"
+                                            value={formData.tent_number}
+                                            onChange={(e) => setFormData({...formData, tent_number: e.target.value})}
+                                            required
+                                            placeholder="A-01"
+                                        />
+                                    </div>
+                                    
+                                    <div className="form-group">
+                                        <label>Зона</label>
+                                        <input
+                                            type="text"
+                                            value={formData.zone}
+                                            onChange={(e) => setFormData({...formData, zone: e.target.value})}
+                                            placeholder="Зона A"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div className="form-group">
+                                    <label>Описание локации</label>
+                                    <textarea
+                                        value={formData.location_description}
+                                        onChange={(e) => setFormData({...formData, location_description: e.target.value})}
+                                        placeholder="Описание расположения палатки"
+                                        rows="2"
+                                    />
+                                </div>
+                                
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label>Вместимость (чел.)</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="20"
+                                            value={formData.capacity}
+                                            onChange={(e) => setFormData({...formData, capacity: parseInt(e.target.value) || 4})}
+                                        />
+                                    </div>
+                                    
+                                    <div className="form-group">
+                                        <label>Телефон контакта</label>
+                                        <input
+                                            type="tel"
+                                            value={formData.contact_phone}
+                                            onChange={(e) => setFormData({...formData, contact_phone: e.target.value})}
+                                            placeholder="+7 (999) 123-45-67"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div className="form-group">
+                                    <label>Имя контактного лица</label>
+                                    <input
+                                        type="text"
+                                        value={formData.contact_name}
+                                        onChange={(e) => setFormData({...formData, contact_name: e.target.value})}
+                                        placeholder="Иван Иванов"
+                                    />
+                                </div>
+                                
+                                <div className="form-group">
+                                    <label>Заметки</label>
+                                    <textarea
+                                        value={formData.notes}
+                                        onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                                        placeholder="Дополнительная информация"
+                                        rows="2"
+                                    />
+                                </div>
+                                
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                                    <button type="submit" className="btn" disabled={loading}>
+                                        {loading ? 'Сохранение...' : 'Сохранить'}
+                                    </button>
+                                    <button type="button" className="btn btn-secondary" onClick={onClose}>
+                                        Отмена
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         function StockModal({ product, onSave, onClose, loading }) {
             const [operation, setOperation] = useState('set');
             const [amount, setAmount] = useState('');
@@ -1749,7 +2181,7 @@
 
                                 {operation === 'set' ? (
                                     <div className="form-group">
-                                        <label>Изменить количество</label>
+                                        <label>Новое количество</label>
                                         <input
                                             type="number"
                                             min="0"

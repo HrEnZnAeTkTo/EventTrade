@@ -74,7 +74,7 @@
         }
 
         .nav-tab.active {
-            color: #667eea;
+            color: #000000;
             border-bottom-color: #667eea;
             background: rgba(102, 126, 234, 0.05);
         }
@@ -111,11 +111,11 @@
 
         .form-group input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #c75509;
         }
 
         .btn {
-            background: #667eea;
+            background: #c75509;
             color: white;
             border: none;
             padding: 12px 24px;
@@ -128,7 +128,7 @@
         }
 
         .btn:hover {
-            background: #5a67d8;
+            background: #25777a;
         }
 
         .btn-secondary {
@@ -149,7 +149,7 @@
             padding: 20px;
             margin-bottom: 15px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #c75509;
         }
 
         .order-header {
@@ -231,14 +231,14 @@
         .qr-preview {
             width: 200px;
             height: 200px;
-            border: 2px dashed #667eea;
+            border: 2px dashed #c75509;
             border-radius: 12px;
             margin: 20px auto;
             display: flex;
             align-items: center;
             justify-content: center;
             flex-direction: column;
-            color: #667eea;
+            color: #c75509;
         }
 
         .inventory-request {
@@ -267,7 +267,7 @@
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            height: 400px;
+            height: 450px;
             display: flex;
             flex-direction: column;
         }
@@ -282,13 +282,14 @@
 
         .message {
             margin-bottom: 15px;
-            padding: 10px;
+            padding: 12px;
             border-radius: 12px;
-            max-width: 80%;
+            max-width: 85%;
+            position: relative;
         }
 
         .message.sent {
-            background: #667eea;
+            background: #25777a;
             color: white;
             margin-left: auto;
             text-align: right;
@@ -299,10 +300,103 @@
             color: #333;
         }
 
+        .message.reply {
+            border-left: 4px solid #25777a;
+            margin-left: 15px;
+        }
+
+        .message.sent.reply {
+            border-left: none;
+            border-right: 4px solid white;
+            margin-left: auto;
+            margin-right: 15px;
+        }
+
+        .message-header {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .message-action {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 11px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            opacity: 0.7;
+        }
+
+        .message-action:hover {
+            opacity: 1;
+            background: rgba(255,255,255,0.2);
+        }
+
+        .message.sent .message-action:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .message.received .message-action:hover {
+            background: rgba(0,0,0,0.1);
+        }
+
+        .reply-to {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-bottom: 5px;
+            opacity: 0.9;
+        }
+
+        .message.received .reply-to {
+            background: rgba(0,0,0,0.1);
+        }
+
         .message-time {
             font-size: 11px;
             opacity: 0.7;
             margin-top: 5px;
+        }
+
+        .chat-input-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .reply-preview {
+            background: #e6f3ff;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            border-left: 3px solid #25777a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .reply-cancel {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 50%;
+        }
+
+        .reply-cancel:hover {
+            background: rgba(0,0,0,0.1);
         }
 
         .chat-input {
@@ -319,13 +413,16 @@
         }
 
         .chat-input button {
-            background: #667eea;
+            background: #c75509;
             color: white;
             border: none;
             border-radius: 50%;
             width: 40px;
             height: 40px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .error-message {
@@ -403,6 +500,10 @@
                 font-size: 12px;
                 padding: 12px 5px;
             }
+
+            .message {
+                max-width: 90%;
+            }
         }
     </style>
 </head>
@@ -461,7 +562,6 @@
             };
 
             const fetchUserData = async () => {
-                // Decode JWT to get user info (simplified)
                 try {
                     const payload = JSON.parse(atob(token.split('.')[1]));
                     setUser(payload);
@@ -579,11 +679,14 @@
                 }
             };
 
-            const sendMessage = async (message) => {
+            const sendMessage = async (message, replyToId = null) => {
                 try {
                     const response = await fetchWithAuth(`${API_BASE}/messages`, {
                         method: 'POST',
-                        body: JSON.stringify({ message })
+                        body: JSON.stringify({ 
+                            message,
+                            reply_to_id: replyToId 
+                        })
                     });
 
                     if (response && response.ok) {
@@ -592,6 +695,25 @@
                     }
                 } catch (err) {
                     setError('Ошибка отправки сообщения');
+                }
+                return false;
+            };
+
+            const deleteMessage = async (messageId) => {
+                try {
+                    const response = await fetchWithAuth(`${API_BASE}/messages/${messageId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response && response.ok) {
+                        fetchMessages();
+                        return true;
+                    } else {
+                        const data = await response.json();
+                        setError(data.error || 'Ошибка удаления сообщения');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
                 }
                 return false;
             };
@@ -627,7 +749,7 @@
                     <div className="header">
                         <h1>Курьер</h1>
                         <div className="user-info">
-                            Добрый день, {user?.username}
+                            Добрый день, {user?.username}!
                         </div>
                         <button className="logout-btn" onClick={logout}>
                             Выйти
@@ -686,6 +808,8 @@
                             <ChatTab 
                                 messages={messages}
                                 onSendMessage={sendMessage}
+                                onDeleteMessage={deleteMessage}
+                                currentUser={user}
                             />
                         )}
                     </div>
@@ -943,11 +1067,13 @@
             );
         }
 
-        function ChatTab({ messages, onSendMessage }) {
+        // Enhanced ChatTab with replies and message deletion
+        function ChatTab({ messages, onSendMessage, onDeleteMessage, currentUser }) {
             const [newMessage, setNewMessage] = useState('');
+            const [replyTo, setReplyTo] = useState(null);
             const messagesEndRef = useRef(null);
 
-            // Автоскролл к последнему сообщению
+            // Auto-scroll to latest message
             useEffect(() => {
                 messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
             }, [messages]);
@@ -955,10 +1081,21 @@
             const handleSendMessage = async (e) => {
                 e.preventDefault();
                 if (newMessage.trim()) {
-                    const success = await onSendMessage(newMessage.trim());
+                    const success = await onSendMessage(newMessage.trim(), replyTo?.id);
                     if (success) {
                         setNewMessage('');
+                        setReplyTo(null);
                     }
+                }
+            };
+
+            const handleReply = (message) => {
+                setReplyTo(message);
+            };
+
+            const handleDelete = async (messageId) => {
+                if (confirm('Удалить это сообщение?')) {
+                    await onDeleteMessage(messageId);
                 }
             };
 
@@ -968,6 +1105,11 @@
                     hour: '2-digit', 
                     minute: '2-digit' 
                 });
+            };
+
+            const canDeleteMessage = (message) => {
+                // Курьеры могут удалять только свои сообщения
+                return message.sender_id === currentUser?.id;
             };
 
             return (
@@ -981,34 +1123,81 @@
                             </div>
                         ) : (
                             <>
-                                {messages.map(message => (
-                                    <div 
-                                        key={message.id} 
-                                        className={`message ${message.sender_id ? 'sent' : 'received'}`}
-                                    >
-                                        <div>{message.message}</div>
-                                        <div className="message-time">
-                                            {message.sender_name} • {formatMessageTime(message.created_at)}
+                                {messages.map(message => {
+                                    const isSent = message.sender_id === currentUser?.id;
+                                    return (
+                                        <div 
+                                            key={message.id} 
+                                            className={`message ${isSent ? 'sent' : 'received'} ${message.reply_to_id ? 'reply' : ''}`}
+                                            onDoubleClick={() => handleReply(message)}
+                                        >
+                                            {message.reply_to_message && (
+                                                <div className="reply-to">
+                                                    ↳ {message.reply_to_sender}: {message.reply_to_message.substring(0, 30)}...
+                                                </div>
+                                            )}
+                                            <div className="message-header">
+                                                <span>{message.sender_name}</span>
+                                                <div className="message-actions">
+                                                    <button 
+                                                        className="message-action"
+                                                        onClick={() => handleReply(message)}
+                                                        title="Ответить (или дважды кликните по сообщению)"
+                                                    >
+                                                        ↩️
+                                                    </button>
+                                                    {canDeleteMessage(message) && (
+                                                        <button 
+                                                            className="message-action"
+                                                            onClick={() => handleDelete(message.id)}
+                                                            title="Удалить сообщение"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div>{message.message}</div>
+                                            <div className="message-time">
+                                                {formatMessageTime(message.created_at)}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                                 <div ref={messagesEndRef} />
                             </>
                         )}
                     </div>
                     
-                    <form className="chat-input" onSubmit={handleSendMessage}>
-                        <input
-                            type="text"
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            placeholder="Введите сообщение..."
-                            maxLength={500}
-                        />
-                        <button type="submit">
-                            ➤
-                        </button>
-                    </form>
+                    <div className="chat-input-container">
+                        {replyTo && (
+                            <div className="reply-preview">
+                                <div>
+                                    <strong>Ответ на:</strong> {replyTo.sender_name}: {replyTo.message.substring(0, 50)}...
+                                </div>
+                                <button 
+                                    className="reply-cancel"
+                                    onClick={() => setReplyTo(null)}
+                                    title="Отменить ответ"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+                        
+                        <form className="chat-input" onSubmit={handleSendMessage}>
+                            <input
+                                type="text"
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
+                                placeholder={replyTo ? "Напишите ответ..." : "Введите сообщение..."}
+                                maxLength={500}
+                            />
+                            <button type="submit" disabled={!newMessage.trim()}>
+                                ➤
+                            </button>
+                        </form>
+                    </div>
                 </div>
             );
         }

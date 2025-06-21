@@ -1,4 +1,4 @@
-// server.js
+// server.js - Enhanced version with message replies, deletion and tents CRUD
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -40,7 +40,7 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Database initialization
+// Database initialization with enhanced messages table
 const initDatabase = async () => {
   try {
     // Users table
@@ -55,7 +55,7 @@ const initDatabase = async () => {
       )
     `);
 
-    // Products table - ДОБАВЛЕНО ПОЛЕ is_active
+    // Products table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
@@ -68,14 +68,21 @@ const initDatabase = async () => {
       )
     `);
 
-    // Tents table
+    // Enhanced tents table with more fields
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tents (
         id SERIAL PRIMARY KEY,
         tent_number VARCHAR(20) UNIQUE NOT NULL,
         qr_code TEXT,
         location_description TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        zone VARCHAR(50),
+        capacity INTEGER DEFAULT 4,
+        contact_name VARCHAR(100),
+        contact_phone VARCHAR(20),
+        notes TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -106,17 +113,55 @@ const initDatabase = async () => {
       )
     `);
 
-    // Messages table
+    // Enhanced messages table with reply support and deletion tracking
     await pool.query(`
       CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
         sender_id INTEGER REFERENCES users(id),
         receiver_id INTEGER REFERENCES users(id),
+        reply_to_id INTEGER REFERENCES messages(id),
         message TEXT NOT NULL,
         is_read BOOLEAN DEFAULT FALSE,
+        is_deleted BOOLEAN DEFAULT FALSE,
+        deleted_by INTEGER REFERENCES users(id),
+        deleted_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Check and add new columns to existing messages table
+    const checkReplyColumn = await pool.query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'messages' AND column_name = 'reply_to_id'
+    `);
+    
+    if (checkReplyColumn.rows.length === 0) {
+      await pool.query('ALTER TABLE messages ADD COLUMN reply_to_id INTEGER REFERENCES messages(id)');
+      await pool.query('ALTER TABLE messages ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE');
+      await pool.query('ALTER TABLE messages ADD COLUMN deleted_by INTEGER REFERENCES users(id)');
+      await pool.query('ALTER TABLE messages ADD COLUMN deleted_at TIMESTAMP');
+      console.log('Enhanced messages table with reply and deletion support');
+    }
+
+    // Check and add new columns to existing tents table
+    const checkTentColumns = await pool.query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'tents' AND column_name IN ('zone', 'capacity', 'contact_name', 'contact_phone', 'notes', 'is_active', 'updated_at')
+    `);
+    
+    if (checkTentColumns.rows.length < 7) {
+      await pool.query(`
+        ALTER TABLE tents 
+        ADD COLUMN IF NOT EXISTS zone VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS capacity INTEGER DEFAULT 4,
+        ADD COLUMN IF NOT EXISTS contact_name VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(20),
+        ADD COLUMN IF NOT EXISTS notes TEXT,
+        ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true,
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      `);
+      console.log('Enhanced tents table with additional fields');
+    }
 
     // Inventory requests table
     await pool.query(`
@@ -132,9 +177,26 @@ const initDatabase = async () => {
       )
     `);
 
+    // Create trigger for updating updated_at in tents
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+          NEW.updated_at = CURRENT_TIMESTAMP;
+          RETURN NEW;
+      END;
+      $$ language 'plpgsql';
+    `);
+
+    await pool.query(`
+      DROP TRIGGER IF EXISTS update_tents_updated_at ON tents;
+      CREATE TRIGGER update_tents_updated_at BEFORE UPDATE ON tents
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    `);
+
     console.log('Database initialized successfully');
     
-    // Insert default admin user
+    // Insert default users
     const adminExists = await pool.query('SELECT id FROM users WHERE username = $1', ['admin']);
     if (adminExists.rows.length === 0) {
       const hashedPassword = await bcrypt.hash('admin123', 10);
@@ -144,7 +206,6 @@ const initDatabase = async () => {
       );
       console.log('Default admin user created (username: admin, password: admin123)');
       
-      // Create courier user
       await pool.query(
         'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4)',
         ['courier1', 'courier1@festival.com', hashedPassword, 'courier']
@@ -168,11 +229,11 @@ const initDatabase = async () => {
     const tentsExist = await pool.query('SELECT id FROM tents LIMIT 1');
     if (tentsExist.rows.length === 0) {
       await pool.query(`
-        INSERT INTO tents (tent_number, location_description) VALUES 
-        ('A-01', 'Первый ряд, левая сторона'),
-        ('A-02', 'Первый ряд, центр'),
-        ('B-01', 'VIP зона, у главной сцены'),
-        ('C-01', 'Семейная зона, рядом с детской площадкой')
+        INSERT INTO tents (tent_number, location_description, zone, capacity) VALUES 
+        ('A-01', 'Первый ряд, левая сторона', 'Зона A', 4),
+        ('A-02', 'Первый ряд, центр', 'Зона A', 6),
+        ('B-01', 'VIP зона, у главной сцены', 'VIP', 2),
+        ('C-01', 'Семейная зона, рядом с детской площадкой', 'Семейная', 8)
       `);
       console.log('Sample tents added');
     }
@@ -181,8 +242,6 @@ const initDatabase = async () => {
     console.error('Database initialization error:', err);
   }
 };
-
-// Routes
 
 // Auth routes
 app.post('/api/auth/login', async (req, res) => {
@@ -223,43 +282,9 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { username, email, password, role = 'courier' } = req.body;
-    
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    const userResult = await pool.query(
-      'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
-      [username, email, hashedPassword, role]
-    );
-
-    const user = userResult.rows[0];
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    res.status(201).json({
-      token,
-      user
-    });
-  } catch (err) {
-    if (err.code === '23505') {
-      res.status(400).json({ error: 'Пользователь уже существует' });
-    } else {
-      console.error(err);
-      res.status(500).json({ error: 'Ошибка сервера' });
-    }
-  }
-});
-
-// Products routes - ИСПРАВЛЕНО! Теперь фильтрует товары для обычных пользователей
+// Products routes (unchanged from original)
 app.get('/api/products', async (req, res) => {
   try {
-    // Для обычных пользователей показываем только активные товары с остатком > 0
-    // Для админов и операторов показываем все товары
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     
@@ -269,7 +294,7 @@ app.get('/api/products', async (req, res) => {
         const decoded = jwt.verify(token, JWT_SECRET);
         showInactive = decoded.role === 'admin' || decoded.role === 'operator';
       } catch (err) {
-        // Токен невалидный, показываем только активные
+        // Invalid token, show only active
       }
     }
     
@@ -332,7 +357,6 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Новый endpoint для обновления только количества товара
 app.patch('/api/products/:id/stock', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin' && req.user.role !== 'operator') {
@@ -345,15 +369,12 @@ app.patch('/api/products/:id/stock', authenticateToken, async (req, res) => {
     let query, params;
     
     if (operation === 'set') {
-      // Установить конкретное значение
       query = 'UPDATE products SET stock_quantity = $1 WHERE id = $2 RETURNING *';
       params = [Math.max(0, newValue), id];
     } else if (operation === 'add') {
-      // Прибавить к текущему значению
       query = 'UPDATE products SET stock_quantity = GREATEST(0, stock_quantity + $1) WHERE id = $2 RETURNING *';
       params = [amount, id];
     } else if (operation === 'subtract') {
-      // Вычесть из текущего значения (не меньше 0)
       query = 'UPDATE products SET stock_quantity = GREATEST(0, stock_quantity - $1) WHERE id = $2 RETURNING *';
       params = [amount, id];
     } else {
@@ -373,7 +394,6 @@ app.patch('/api/products/:id/stock', authenticateToken, async (req, res) => {
   }
 });
 
-// Скрытие/активация товара - НОВОЕ!
 app.patch('/api/products/:id/toggle', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin' && req.user.role !== 'operator') {
@@ -404,7 +424,6 @@ app.patch('/api/products/:id/toggle', authenticateToken, async (req, res) => {
   }
 });
 
-// Удаление товара
 app.delete('/api/products/:id', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -426,10 +445,19 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Tents routes
+// Enhanced Tents routes with full CRUD
 app.get('/api/tents', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM tents ORDER BY tent_number');
+    let query = 'SELECT * FROM tents';
+    
+    // For non-admin users, show only active tents
+    if (req.user.role === 'courier') {
+      query += ' WHERE is_active = true';
+    }
+    
+    query += ' ORDER BY tent_number';
+    
+    const result = await pool.query(query);
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -443,14 +471,23 @@ app.post('/api/tents', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Недостаточно прав' });
     }
 
-    const { tent_number, location_description } = req.body;
+    const { 
+      tent_number, 
+      location_description, 
+      zone, 
+      capacity, 
+      contact_name, 
+      contact_phone, 
+      notes 
+    } = req.body;
     
     // Generate QR code
     const qr_code = await QRCode.toDataURL(tent_number);
     
     const result = await pool.query(
-      'INSERT INTO tents (tent_number, qr_code, location_description) VALUES ($1, $2, $3) RETURNING *',
-      [tent_number, qr_code, location_description]
+      `INSERT INTO tents (tent_number, qr_code, location_description, zone, capacity, contact_name, contact_phone, notes) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [tent_number, qr_code, location_description, zone, capacity || 4, contact_name, contact_phone, notes]
     );
 
     res.status(201).json(result.rows[0]);
@@ -464,7 +501,119 @@ app.post('/api/tents', authenticateToken, async (req, res) => {
   }
 });
 
-// Orders routes - ИСПРАВЛЕНО! Теперь курьеры видят все доступные заказы
+app.put('/api/tents/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin' && req.user.role !== 'operator') {
+      return res.status(403).json({ error: 'Недостаточно прав' });
+    }
+
+    const { id } = req.params;
+    const { 
+      tent_number, 
+      location_description, 
+      zone, 
+      capacity, 
+      contact_name, 
+      contact_phone, 
+      notes 
+    } = req.body;
+    
+    // Regenerate QR code if tent number changed
+    let qr_code = null;
+    if (tent_number) {
+      qr_code = await QRCode.toDataURL(tent_number);
+    }
+    
+    const result = await pool.query(
+      `UPDATE tents SET 
+       tent_number = COALESCE($1, tent_number),
+       qr_code = COALESCE($2, qr_code),
+       location_description = COALESCE($3, location_description),
+       zone = COALESCE($4, zone),
+       capacity = COALESCE($5, capacity),
+       contact_name = COALESCE($6, contact_name),
+       contact_phone = COALESCE($7, contact_phone),
+       notes = COALESCE($8, notes)
+       WHERE id = $9 RETURNING *`,
+      [tent_number, qr_code, location_description, zone, capacity, contact_name, contact_phone, notes, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Палатка не найдена' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err.code === '23505') {
+      res.status(400).json({ error: 'Палатка с таким номером уже существует' });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: 'Ошибка сервера' });
+    }
+  }
+});
+
+app.patch('/api/tents/:id/toggle', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin' && req.user.role !== 'operator') {
+      return res.status(403).json({ error: 'Недостаточно прав' });
+    }
+
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      'UPDATE tents SET is_active = NOT is_active WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Палатка не найдена' });
+    }
+
+    const tent = result.rows[0];
+    const status = tent.is_active ? 'активирована' : 'скрыта';
+    
+    res.json({ 
+      message: `Палатка ${status}`, 
+      tent: tent 
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+app.delete('/api/tents/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Недостаточно прав' });
+    }
+
+    const { id } = req.params;
+    
+    // Check if tent has orders
+    const ordersCheck = await pool.query('SELECT COUNT(*) as count FROM orders WHERE tent_id = $1', [id]);
+    
+    if (parseInt(ordersCheck.rows[0].count) > 0) {
+      return res.status(400).json({ 
+        error: 'Невозможно удалить палатку с существующими заказами. Сначала скройте её.' 
+      });
+    }
+    
+    const result = await pool.query('DELETE FROM tents WHERE id = $1 RETURNING *', [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Палатка не найдена' });
+    }
+
+    res.json({ message: 'Палатка удалена', tent: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// Orders routes (unchanged from original)
 app.get('/api/orders', authenticateToken, async (req, res) => {
   try {
     let query = `
@@ -488,7 +637,6 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
       LEFT JOIN products p ON oi.product_id = p.id
     `;
 
-    // ИСПРАВЛЕНО: Курьеры видят все заказы (новые + свои), админы видят все
     if (req.user.role === 'courier') {
       query += ` WHERE o.courier_id IS NULL OR o.courier_id = $1`;
     }
@@ -514,28 +662,26 @@ app.post('/api/orders', async (req, res) => {
     
     const { tent_number, items, payment_method } = req.body;
     
-    // Find tent
-    const tentResult = await client.query('SELECT id FROM tents WHERE tent_number = $1', [tent_number]);
+    const tentResult = await client.query('SELECT id FROM tents WHERE tent_number = $1 AND is_active = true', [tent_number]);
     
     if (tentResult.rows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Палатка не найдена' });
+      return res.status(404).json({ error: 'Палатка не найдена или неактивна' });
     }
 
     const tent_id = tentResult.rows[0].id;
     
-    // Проверяем наличие товаров и рассчитываем общую стоимость
     let total_amount = 0;
     const stockErrors = [];
     
     for (const item of items) {
       const productResult = await client.query(
-        'SELECT id, name, price, stock_quantity FROM products WHERE id = $1', 
+        'SELECT id, name, price, stock_quantity FROM products WHERE id = $1 AND is_active = true', 
         [item.product_id]
       );
       
       if (productResult.rows.length === 0) {
-        stockErrors.push(`Товар с ID ${item.product_id} не найден`);
+        stockErrors.push(`Товар с ID ${item.product_id} не найден или неактивен`);
         continue;
       }
       
@@ -554,7 +700,6 @@ app.post('/api/orders', async (req, res) => {
       return res.status(400).json({ error: stockErrors.join('\n') });
     }
 
-    // Create order
     const orderResult = await client.query(
       'INSERT INTO orders (tent_id, total_amount, payment_method) VALUES ($1, $2, $3) RETURNING *',
       [tent_id, total_amount, payment_method]
@@ -562,7 +707,6 @@ app.post('/api/orders', async (req, res) => {
 
     const order = orderResult.rows[0];
 
-    // Add order items and update stock
     for (const item of items) {
       const productResult = await client.query('SELECT price FROM products WHERE id = $1', [item.product_id]);
       if (productResult.rows.length > 0) {
@@ -571,7 +715,6 @@ app.post('/api/orders', async (req, res) => {
           [order.id, item.product_id, item.quantity, productResult.rows[0].price]
         );
         
-        // Update stock
         await client.query(
           'UPDATE products SET stock_quantity = stock_quantity - $1 WHERE id = $2',
           [item.quantity, item.product_id]
@@ -620,17 +763,22 @@ app.put('/api/orders/:id/status', authenticateToken, async (req, res) => {
   }
 });
 
-// Messages routes - ИСПРАВЛЕНО! Сообщения в правильном порядке
+// Enhanced Messages routes with replies and deletion
 app.get('/api/messages', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT m.*, 
              s.username as sender_name, 
-             r.username as receiver_name
+             r.username as receiver_name,
+             rm.message as reply_to_message,
+             rs.username as reply_to_sender
       FROM messages m
       JOIN users s ON m.sender_id = s.id
       LEFT JOIN users r ON m.receiver_id = r.id
-      WHERE m.sender_id = $1 OR m.receiver_id = $1 OR m.receiver_id IS NULL
+      LEFT JOIN messages rm ON m.reply_to_id = rm.id
+      LEFT JOIN users rs ON rm.sender_id = rs.id
+      WHERE (m.sender_id = $1 OR m.receiver_id = $1 OR m.receiver_id IS NULL)
+        AND m.is_deleted = false
       ORDER BY m.created_at ASC
     `, [req.user.id]);
 
@@ -643,18 +791,17 @@ app.get('/api/messages', authenticateToken, async (req, res) => {
 
 app.post('/api/messages', authenticateToken, async (req, res) => {
   try {
-    const { message, receiver_id } = req.body;
+    const { message, receiver_id, reply_to_id } = req.body;
     
-    // Если админ/оператор не указал получателя, отправляем всем курьерам
     let targetReceiverId = receiver_id;
     
     if ((req.user.role === 'admin' || req.user.role === 'operator') && !receiver_id) {
-      targetReceiverId = null; // null означает "для всех курьеров"
+      targetReceiverId = null;
     }
     
     const result = await pool.query(
-      'INSERT INTO messages (sender_id, receiver_id, message) VALUES ($1, $2, $3) RETURNING *',
-      [req.user.id, targetReceiverId, message]
+      'INSERT INTO messages (sender_id, receiver_id, reply_to_id, message) VALUES ($1, $2, $3, $4) RETURNING *',
+      [req.user.id, targetReceiverId, reply_to_id, message]
     );
 
     res.status(201).json(result.rows[0]);
@@ -664,7 +811,42 @@ app.post('/api/messages', authenticateToken, async (req, res) => {
   }
 });
 
-// Inventory requests routes
+app.delete('/api/messages/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if user can delete this message
+    const messageResult = await pool.query('SELECT * FROM messages WHERE id = $1', [id]);
+    
+    if (messageResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Сообщение не найдено' });
+    }
+    
+    const message = messageResult.rows[0];
+    
+    // Couriers can only delete their own messages
+    // Admins/operators can delete any message
+    const canDelete = (req.user.role === 'admin' || req.user.role === 'operator') || 
+                     (message.sender_id === req.user.id);
+    
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Недостаточно прав для удаления этого сообщения' });
+    }
+    
+    // Soft delete - mark as deleted instead of actually deleting
+    const result = await pool.query(
+      'UPDATE messages SET is_deleted = true, deleted_by = $1, deleted_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [req.user.id, id]
+    );
+
+    res.json({ message: 'Сообщение удалено', deleted_message: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Ошибка сервера' });
+  }
+});
+
+// Inventory requests routes (unchanged from original)
 app.post('/api/inventory-requests', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'courier' && req.user.role !== 'admin' && req.user.role !== 'operator') {
@@ -706,7 +888,6 @@ app.get('/api/inventory-requests', authenticateToken, async (req, res) => {
   }
 });
 
-// Новый endpoint для одобрения запроса пополнения
 app.patch('/api/inventory-requests/:id/approve', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin' && req.user.role !== 'operator') {
@@ -716,7 +897,6 @@ app.patch('/api/inventory-requests/:id/approve', authenticateToken, async (req, 
     const { id } = req.params;
     const { approved_quantity } = req.body;
 
-    // Получаем информацию о запросе
     const requestResult = await pool.query(
       'SELECT * FROM inventory_requests WHERE id = $1 AND status = $2',
       [id, 'pending']
@@ -729,19 +909,16 @@ app.patch('/api/inventory-requests/:id/approve', authenticateToken, async (req, 
     const request = requestResult.rows[0];
     const quantityToAdd = approved_quantity || request.requested_quantity;
 
-    // Обновляем статус запроса
     await pool.query(
       'UPDATE inventory_requests SET status = $1, approved_quantity = $2 WHERE id = $3',
       ['approved', quantityToAdd, id]
     );
 
-    // Добавляем товар на склад
     await pool.query(
       'UPDATE products SET stock_quantity = stock_quantity + $1 WHERE id = $2',
       [quantityToAdd, request.product_id]
     );
 
-    // Получаем обновленную информацию
     const updatedRequest = await pool.query(`
       SELECT ir.*, u.username as courier_name, p.name as product_name
       FROM inventory_requests ir
@@ -760,7 +937,6 @@ app.patch('/api/inventory-requests/:id/approve', authenticateToken, async (req, 
   }
 });
 
-// Отклонение запроса пополнения
 app.patch('/api/inventory-requests/:id/reject', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin' && req.user.role !== 'operator') {
@@ -789,11 +965,10 @@ app.patch('/api/inventory-requests/:id/reject', authenticateToken, async (req, r
   }
 });
 
-// Payment simulation endpoint
+// Payment simulation endpoints (unchanged)
 app.get('/api/payment/:orderId', async (req, res) => {
   const { orderId } = req.params;
   
-  // Simulate payment page
   res.send(`
     <html>
       <head><title>Оплата заказа #${orderId}</title></head>
@@ -840,7 +1015,8 @@ app.get('/api/health', (req, res) => {
 // Initialize database and start server
 initDatabase().then(() => {
   app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`✅ Enhanced server running on port ${PORT}`);
+    console.log(`📋 New features: Message replies, deletion, and full tents CRUD`);
   });
 });
 
