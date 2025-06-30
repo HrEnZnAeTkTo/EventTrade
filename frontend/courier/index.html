@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Курьер</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.4/babel.min.js"></script>
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiQ3VyaWVyIEFwcCIsInNob3J0X25hbWUiOiJDb3VyaWVyIiwic3RhcnRfdXJsIjoiLyIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwidGhlbWVfY29sb3IiOiIjNjY3ZWVhIiwiYmFja2dyb3VuZF9jb2xvciI6IiNmZmZmZmYifQ==">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .app {
+            min-height: 100vh;
+            max-width: 480px;
+            margin: 0 auto;
+            background: white;
+            position: relative;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #25777a 0%, #25777a 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5em;
+            margin-bottom: 5px;
+        }
+
+        .header .user-info {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: white;
+            border-bottom: 1px solid #eee;
+            position: sticky;
+            top: 100px;
+            z-index: 99;
+        }
+
+        .nav-tab {
+            flex: 1;
+            padding: 15px 10px;
+            text-align: center;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .nav-tab.active {
+            color: #000000;
+            border-bottom-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .content {
+            padding: 20px;
+            padding-bottom: 80px;
+        }
+
+        .login-form {
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #c75509;
+        }
+
+        .btn {
+            background: #c75509;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            background: #25777a;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-success {
+            background: #28a745;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .order-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #c75509;
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .order-number {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .order-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-new {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status-in_delivery {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .status-completed {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .order-details {
+            margin-bottom: 15px;
+        }
+
+        .order-details p {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .order-items {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+
+        .order-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .order-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .order-actions .btn {
+            flex: 1;
+            margin: 0;
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+
+        .qr-scanner {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .qr-preview {
+            width: 200px;
+            height: 200px;
+            border: 2px dashed #c75509;
+            border-radius: 12px;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: #c75509;
+        }
+
+        .inventory-request {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .inventory-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .inventory-form select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            height: 450px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 15px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 12px;
+            max-width: 85%;
+            position: relative;
+        }
+
+        .message.sent {
+            background: #25777a;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .message.received {
+            background: #f1f3f4;
+            color: #333;
+        }
+
+        .message.reply {
+            border-left: 4px solid #25777a;
+            margin-left: 15px;
+        }
+
+        .message.sent.reply {
+            border-left: none;
+            border-right: 4px solid white;
+            margin-left: auto;
+            margin-right: 15px;
+        }
+
+        .message-header {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .message-action {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 11px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            opacity: 0.7;
+        }
+
+        .message-action:hover {
+            opacity: 1;
+            background: rgba(255,255,255,0.2);
+        }
+
+        .message.sent .message-action:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .message.received .message-action:hover {
+            background: rgba(0,0,0,0.1);
+        }
+
+        .reply-to {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-bottom: 5px;
+            opacity: 0.9;
+        }
+
+        .message.received .reply-to {
+            background: rgba(0,0,0,0.1);
+        }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .chat-input-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .reply-preview {
+            background: #e6f3ff;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            border-left: 3px solid #25777a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .reply-cancel {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 50%;
+        }
+
+        .reply-cancel:hover {
+            background: rgba(0,0,0,0.1);
+        }
+
+        .chat-input {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .chat-input button {
+            background: #c75509;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px solid #fecaca;
+        }
+
+        .success-message {
+            background: #f0fff4;
+            color: #22543d;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px solid #9ae6b4;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .logout-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 480px) {
+            .app {
+                max-width: 100%;
+            }
+            
+            .order-actions {
+                flex-direction: column;
+            }
+            
+            .nav-tab {
+                font-size: 12px;
+                padding: 12px 5px;
+            }
+
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const API_BASE = window.location.protocol + '//' + window.location.hostname + ':3000/api';
+
+        function CourierApp() {
+            const [user, setUser] = useState(null);
+            const [token, setToken] = useState(localStorage.getItem('courier_token'));
+            const [activeTab, setActiveTab] = useState('orders');
+            const [orders, setOrders] = useState([]);
+            const [products, setProducts] = useState([]);
+            const [messages, setMessages] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+            const [success, setSuccess] = useState('');
+
+            useEffect(() => {
+                if (token) {
+                    fetchUserData();
+                    fetchOrders();
+                    fetchProducts();
+                    fetchMessages();
+                    
+                    // Poll for new data every 30 seconds
+                    const interval = setInterval(() => {
+                        fetchOrders();
+                        fetchMessages();
+                    }, 30000);
+                    
+                    return () => clearInterval(interval);
+                }
+            }, [token]);
+
+            const fetchWithAuth = async (url, options = {}) => {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        ...options.headers,
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.status === 401) {
+                    logout();
+                    return null;
+                }
+                
+                return response;
+            };
+
+            const fetchUserData = async () => {
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    setUser(payload);
+                } catch (err) {
+                    logout();
+                }
+            };
+
+            const fetchOrders = async () => {
+                try {
+                    const response = await fetchWithAuth(`${API_BASE}/orders`);
+                    if (response && response.ok) {
+                        const data = await response.json();
+                        setOrders(data);
+                    }
+                } catch (err) {
+                    setError('Ошибка загрузки заказов');
+                }
+            };
+
+            const fetchProducts = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/products`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setProducts(data);
+                    }
+                } catch (err) {
+                    console.error('Error fetching products:', err);
+                }
+            };
+
+            const fetchMessages = async () => {
+                try {
+                    const response = await fetchWithAuth(`${API_BASE}/messages`);
+                    if (response && response.ok) {
+                        const data = await response.json();
+                        setMessages(data);
+                    }
+                } catch (err) {
+                    console.error('Error fetching messages:', err);
+                }
+            };
+
+            const login = async (username, password) => {
+                setLoading(true);
+                setError('');
+
+                try {
+                    const response = await fetch(`${API_BASE}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        setToken(data.token);
+                        setUser(data.user);
+                        localStorage.setItem('courier_token', data.token);
+                    } else {
+                        setError(data.error || 'Ошибка входа');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const logout = () => {
+                setToken(null);
+                setUser(null);
+                localStorage.removeItem('courier_token');
+                setOrders([]);
+                setMessages([]);
+                setError('');
+                setSuccess('');
+            };
+
+            const takeOrder = async (orderId) => {
+                try {
+                    const response = await fetchWithAuth(`${API_BASE}/orders/${orderId}/status`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ status: 'in_delivery' })
+                    });
+
+                    if (response && response.ok) {
+                        setSuccess('Заказ взят в доставку');
+                        fetchOrders();
+                    } else {
+                        setError('Ошибка при взятии заказа');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
+                }
+            };
+
+            const completeOrder = async (orderId) => {
+                try {
+                    const response = await fetchWithAuth(`${API_BASE}/orders/${orderId}/status`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ status: 'completed' })
+                    });
+
+                    if (response && response.ok) {
+                        setSuccess('Заказ завершен');
+                        fetchOrders();
+                    } else {
+                        setError('Ошибка при завершении заказа');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
+                }
+            };
+
+            const sendMessage = async (message, replyToId = null) => {
+                try {
+                    const response = await fetchWithAuth(`${API_BASE}/messages`, {
+                        method: 'POST',
+                        body: JSON.stringify({ 
+                            message,
+                            reply_to_id: replyToId 
+                        })
+                    });
+
+                    if (response && response.ok) {
+                        fetchMessages();
+                        return true;
+                    }
+                } catch (err) {
+                    setError('Ошибка отправки сообщения');
+                }
+                return false;
+            };
+
+            const deleteMessage = async (messageId) => {
+                try {
+                    const response = await fetchWithAuth(`${API_BASE}/messages/${messageId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response && response.ok) {
+                        fetchMessages();
+                        return true;
+                    } else {
+                        const data = await response.json();
+                        setError(data.error || 'Ошибка удаления сообщения');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
+                }
+                return false;
+            };
+
+            const requestInventory = async (productId, quantity) => {
+                try {
+                    const response = await fetchWithAuth(`${API_BASE}/inventory-requests`, {
+                        method: 'POST',
+                        body: JSON.stringify({ 
+                            product_id: parseInt(productId), 
+                            requested_quantity: parseInt(quantity) 
+                        })
+                    });
+
+                    if (response && response.ok) {
+                        setSuccess('Запрос на пополнение отправлен');
+                        return true;
+                    } else {
+                        setError('Ошибка отправки запроса');
+                    }
+                } catch (err) {
+                    setError('Ошибка сети');
+                }
+                return false;
+            };
+
+            if (!token) {
+                return <LoginForm onLogin={login} loading={loading} error={error} />;
+            }
+
+            return (
+                <div className="app">
+                    <div className="header">
+                        <h1>Курьер</h1>
+                        <div className="user-info">
+                            Добрый день, {user?.username}!
+                        </div>
+                        <button className="logout-btn" onClick={logout}>
+                            Выйти
+                        </button>
+                    </div>
+
+                    <div className="nav-tabs">
+                        <button 
+                            className={`nav-tab ${activeTab === 'orders' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('orders')}
+                        >
+                            📦 Заказы
+                        </button>
+                        <button 
+                            className={`nav-tab ${activeTab === 'scanner' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('scanner')}
+                        >
+                            📱 Сканер
+                        </button>
+                        <button 
+                            className={`nav-tab ${activeTab === 'inventory' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('inventory')}
+                        >
+                            📋 Запросы
+                        </button>
+                        <button 
+                            className={`nav-tab ${activeTab === 'chat' ? 'active' : ''}`}
+                            onClick={() => setActiveTab('chat')}
+                        >
+                            💬 Чат
+                        </button>
+                    </div>
+
+                    <div className="content">
+                        {error && <div className="error-message">{error}</div>}
+                        {success && <div className="success-message">{success}</div>}
+
+                        {activeTab === 'orders' && (
+                            <OrdersTab 
+                                orders={orders} 
+                                onTakeOrder={takeOrder}
+                                onCompleteOrder={completeOrder}
+                            />
+                        )}
+                        
+                        {activeTab === 'scanner' && <QRScannerTab />}
+                        
+                        {activeTab === 'inventory' && (
+                            <InventoryTab 
+                                products={products}
+                                onRequestInventory={requestInventory}
+                            />
+                        )}
+                        
+                        {activeTab === 'chat' && (
+                            <ChatTab 
+                                messages={messages}
+                                onSendMessage={sendMessage}
+                                onDeleteMessage={deleteMessage}
+                                currentUser={user}
+                            />
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function LoginForm({ onLogin, loading, error }) {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onLogin(username, password);
+            };
+
+            return (
+                <div className="app">
+                    <div className="header">
+                        <h1>🚚 Курьер</h1>
+                        <div>Вход в систему</div>
+                    </div>
+                    
+                    <form className="login-form" onSubmit={handleSubmit}>
+                        {error && <div className="error-message">{error}</div>}
+                        
+                        <div className="form-group">
+                            <label>Логин</label>
+                            <input
+                                type="text"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                placeholder="Введите логин"
+                                required
+                            />
+                        </div>
+                        
+                        <div className="form-group">
+                            <label>Пароль</label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Введите пароль"
+                                required
+                            />
+                        </div>
+                        
+                        <button type="submit" className="btn" disabled={loading}>
+                            {loading ? 'Вход...' : 'Войти'}
+                        </button>
+                        
+                        <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
+                            Тестовый аккаунт:<br />
+                            Логин: courier1<br />
+                            Пароль: admin123
+                        </div>
+                    </form>
+                </div>
+            );
+        }
+
+        function OrdersTab({ orders, onTakeOrder, onCompleteOrder }) {
+            const getStatusText = (status) => {
+                switch (status) {
+                    case 'new': return 'Новый';
+                    case 'in_delivery': return 'В доставке';
+                    case 'completed': return 'Завершен';
+                    default: return status;
+                }
+            };
+
+            const formatDateTime = (dateString) => {
+                const date = new Date(dateString);
+                return date.toLocaleString('ru-RU');
+            };
+
+            if (orders.length === 0) {
+                return (
+                    <div className="empty-state">
+                        <h3>📦 Нет заказов</h3>
+                        <p>Новые заказы появятся здесь</p>
+                    </div>
+                );
+            }
+
+            return (
+                <div>
+                    {orders.map(order => (
+                        <div key={order.id} className="order-card">
+                            <div className="order-header">
+                                <div className="order-number">Заказ #{order.id}</div>
+                                <div className={`order-status status-${order.status}`}>
+                                    {getStatusText(order.status)}
+                                </div>
+                            </div>
+                            
+                            <div className="order-details">
+                                <p><strong>Палатка:</strong> {order.tent_number}</p>
+                                <p><strong>Сумма:</strong> {order.total_amount} ₽</p>
+                                <p><strong>Создан:</strong> {formatDateTime(order.created_at)}</p>
+                                {order.courier_name && (
+                                    <p><strong>Курьер:</strong> {order.courier_name}</p>
+                                )}
+                            </div>
+
+                            {order.items && order.items[0] && (
+                                <div className="order-items">
+                                    <strong>Товары:</strong>
+                                    {order.items.map((item, index) => (
+                                        <div key={index} className="order-item">
+                                            <span>{item.product_name}</span>
+                                            <span>{item.quantity} шт. × {item.price} ₽</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="order-actions">
+                                {order.status === 'new' && (
+                                    <button 
+                                        className="btn btn-success"
+                                        onClick={() => onTakeOrder(order.id)}
+                                    >
+                                        Взять заказ
+                                    </button>
+                                )}
+                                
+                                {order.status === 'in_delivery' && (
+                                    <button 
+                                        className="btn btn-success"
+                                        onClick={() => onCompleteOrder(order.id)}
+                                    >
+                                        Завершить
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        function QRScannerTab() {
+            const [scannedCode, setScannedCode] = useState('');
+            const [isScanning, setIsScanning] = useState(false);
+
+            const simulateQRScan = () => {
+                setIsScanning(true);
+                setTimeout(() => {
+                    const testCodes = ['A-15', 'B-23', 'C-07', 'D-31'];
+                    const randomCode = testCodes[Math.floor(Math.random() * testCodes.length)];
+                    setScannedCode(randomCode);
+                    setIsScanning(false);
+                }, 2000);
+            };
+
+            return (
+                <div className="qr-scanner">
+                    <p>Отсканируйте QR-код на палатке для завершения доставки</p>
+                    
+                    <div className="qr-preview">
+                        {isScanning ? (
+                            <div>
+                                <div className="spinner"></div>
+                                <p>Сканирование...</p>
+                            </div>
+                        ) : scannedCode ? (
+                            <div>
+                                <div style={{ fontSize: '2em', marginBottom: '10px' }}>✅</div>
+                                <p>Палатка: <strong>{scannedCode}</strong></p>
+                            </div>
+                        ) : (
+                            <div>
+                                <div style={{ fontSize: '2em', marginBottom: '10px' }}>📱</div>
+                                <p>Нажмите для сканирования</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <button 
+                        className="btn"
+                        onClick={simulateQRScan}
+                        disabled={isScanning}
+                    >
+                        {isScanning ? 'Сканирование...' : 'Сканировать QR-код'}
+                    </button>
+
+                    {scannedCode && (
+                        <button 
+                            className="btn btn-secondary"
+                            onClick={() => setScannedCode('')}
+                            style={{ marginTop: '10px' }}
+                        >
+                            Сканировать еще раз
+                        </button>
+                    )}
+                </div>
+            );
+        }
+
+        function InventoryTab({ products, onRequestInventory }) {
+            const [selectedProduct, setSelectedProduct] = useState('');
+            const [quantity, setQuantity] = useState('1');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (selectedProduct && quantity) {
+                    const success = await onRequestInventory(selectedProduct, quantity);
+                    if (success) {
+                        setSelectedProduct('');
+                        setQuantity('1');
+                    }
+                }
+            };
+
+            return (
+                <div className="inventory-request">
+                    <h3>📋 Запрос пополнения товара</h3>
+                    <p>Запросите пополнение товара у оператора</p>
+                    
+                    <form className="inventory-form" onSubmit={handleSubmit}>
+                        <div className="form-group">
+                            <label>Товар</label>
+                            <select 
+                                value={selectedProduct}
+                                onChange={(e) => setSelectedProduct(e.target.value)}
+                                required
+                            >
+                                <option value="">Выберите товар</option>
+                                {products.map(product => (
+                                    <option key={product.id} value={product.id}>
+                                        {product.name} (остаток: {product.stock_quantity})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        <div className="form-group">
+                            <label>Количество</label>
+                            <input
+                                type="number"
+                                min="1"
+                                value={quantity}
+                                onChange={(e) => setQuantity(e.target.value)}
+                                required
+                            />
+                        </div>
+                        
+                        <button type="submit" className="btn">
+                            Отправить запрос
+                        </button>
+                    </form>
+                </div>
+            );
+        }
+
+        // Enhanced ChatTab with replies and message deletion
+        function ChatTab({ messages, onSendMessage, onDeleteMessage, currentUser }) {
+            const [newMessage, setNewMessage] = useState('');
+            const [replyTo, setReplyTo] = useState(null);
+            const messagesEndRef = useRef(null);
+
+            // Auto-scroll to latest message
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, [messages]);
+
+            const handleSendMessage = async (e) => {
+                e.preventDefault();
+                if (newMessage.trim()) {
+                    const success = await onSendMessage(newMessage.trim(), replyTo?.id);
+                    if (success) {
+                        setNewMessage('');
+                        setReplyTo(null);
+                    }
+                }
+            };
+
+            const handleReply = (message) => {
+                setReplyTo(message);
+            };
+
+            const handleDelete = async (messageId) => {
+                if (confirm('Удалить это сообщение?')) {
+                    await onDeleteMessage(messageId);
+                }
+            };
+
+            const formatMessageTime = (dateString) => {
+                const date = new Date(dateString);
+                return date.toLocaleTimeString('ru-RU', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+            };
+
+            const canDeleteMessage = (message) => {
+                // Курьеры могут удалять только свои сообщения
+                return message.sender_id === currentUser?.id;
+            };
+
+            return (
+                <div className="chat-container">
+                    <h3>💬 Чат с оператором</h3>
+                    
+                    <div className="chat-messages">
+                        {messages.length === 0 ? (
+                            <div className="empty-state">
+                                <p>Нет сообщений</p>
+                            </div>
+                        ) : (
+                            <>
+                                {messages.map(message => {
+                                    const isSent = message.sender_id === currentUser?.id;
+                                    return (
+                                        <div 
+                                            key={message.id} 
+                                            className={`message ${isSent ? 'sent' : 'received'} ${message.reply_to_id ? 'reply' : ''}`}
+                                            onDoubleClick={() => handleReply(message)}
+                                        >
+                                            {message.reply_to_message && (
+                                                <div className="reply-to">
+                                                    ↳ {message.reply_to_sender}: {message.reply_to_message.substring(0, 30)}...
+                                                </div>
+                                            )}
+                                            <div className="message-header">
+                                                <span>{message.sender_name}</span>
+                                                <div className="message-actions">
+                                                    <button 
+                                                        className="message-action"
+                                                        onClick={() => handleReply(message)}
+                                                        title="Ответить (или дважды кликните по сообщению)"
+                                                    >
+                                                        ↩️
+                                                    </button>
+                                                    {canDeleteMessage(message) && (
+                                                        <button 
+                                                            className="message-action"
+                                                            onClick={() => handleDelete(message.id)}
+                                                            title="Удалить сообщение"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div>{message.message}</div>
+                                            <div className="message-time">
+                                                {formatMessageTime(message.created_at)}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                <div ref={messagesEndRef} />
+                            </>
+                        )}
+                    </div>
+                    
+                    <div className="chat-input-container">
+                        {replyTo && (
+                            <div className="reply-preview">
+                                <div>
+                                    <strong>Ответ на:</strong> {replyTo.sender_name}: {replyTo.message.substring(0, 50)}...
+                                </div>
+                                <button 
+                                    className="reply-cancel"
+                                    onClick={() => setReplyTo(null)}
+                                    title="Отменить ответ"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+                        
+                        <form className="chat-input" onSubmit={handleSendMessage}>
+                            <input
+                                type="text"
+                                value={newMessage}
+                                onChange={(e) => setNewMessage(e.target.value)}
+                                placeholder={replyTo ? "Напишите ответ..." : "Введите сообщение..."}
+                                maxLength={500}
+                            />
+                            <button type="submit" disabled={!newMessage.trim()}>
+                                ➤
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<CourierApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>

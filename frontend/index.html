@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventTrade</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.4/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qr-scanner/1.4.2/qr-scanner.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(180deg, #25777a 0%, #25777a 5%, #25777a 95%, #25777a 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .app {
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #9d470d 0%, #c75509 5%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .step {
+            margin-bottom: 30px;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .step-number {
+            background: #c75509;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+
+        .step-title {
+            font-size: 1.4em;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #c75509;
+        }
+
+        .tent-input-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        .tent-input-container input {
+            flex: 1;
+        }
+
+        .qr-scan-btn, .btn {
+            background: #c75509;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+        }
+
+        .qr-scan-btn:hover, .btn:hover {
+            background: #25777a;
+            transform: translateY(-2px);
+        }
+
+        .product-item {
+            border: 2px solid #e1e5e9;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .product-item:hover {
+            border-color: #25777a;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
+        }
+
+        .product-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        .product-info h3 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .product-info p {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .product-price {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #25777a;
+        }
+
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .quantity-btn {
+            background: #f7f7f7;
+            border: 2px solid #e1e5e9;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .quantity-btn:hover {
+            background: #25777a;
+            color: white;
+            border-color: #25777a;
+        }
+
+        .quantity-display {
+            font-size: 1.2em;
+            font-weight: bold;
+            min-width: 30px;
+            text-align: center;
+        }
+
+        .order-summary {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .summary-total {
+            border-top: 2px solid #e1e5e9;
+            padding-top: 10px;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .payment-methods {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .payment-method {
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .payment-method.selected {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .payment-method:hover {
+            border-color: #667eea;
+        }
+
+        .submit-order {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .submit-order:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .submit-order:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border: 1px solid #fecaca;
+        }
+
+        .success-message {
+            background: #f0fff4;
+            color: #22543d;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border: 1px solid #9ae6b4;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #qr-video {
+            width: 100%;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+
+        .qr-scanner-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .qr-scanner-content {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+            
+            .payment-methods {
+                grid-template-columns: 1fr;
+            }
+            
+            .tent-input-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const API_BASE = window.location.protocol + '//' + window.location.hostname + ':3000/api';
+
+        function OrderApp() {
+            const [products, setProducts] = useState([]);
+            const [cart, setCart] = useState({});
+            const [tentNumber, setTentNumber] = useState('');
+            const [paymentMethod, setPaymentMethod] = useState('sbp');
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+            const [success, setSuccess] = useState('');
+            const [showQRScanner, setShowQRScanner] = useState(false);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            useEffect(() => {
+                fetchProducts();
+            }, []);
+
+            const fetchProducts = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/products`);
+                    const data = await response.json();
+                    setProducts(data);
+                    setLoading(false);
+                } catch (err) {
+                    setError('Ошибка загрузки товаров');
+                    setLoading(false);
+                }
+            };
+
+            const updateQuantity = (productId, change) => {
+                setCart(prev => {
+                    const newCart = { ...prev };
+                    const currentQuantity = newCart[productId] || 0;
+                    const newQuantity = Math.max(0, currentQuantity + change);
+                    
+                    if (newQuantity === 0) {
+                        delete newCart[productId];
+                    } else {
+                        newCart[productId] = newQuantity;
+                    }
+                    
+                    return newCart;
+                });
+            };
+
+            const calculateTotal = () => {
+                return Object.entries(cart).reduce((total, [productId, quantity]) => {
+                    const product = products.find(p => p.id === parseInt(productId));
+                    return total + (product ? product.price * quantity : 0);
+                }, 0).toFixed(2);
+            };
+
+            const handleQRScan = (result) => {
+                setTentNumber(result);
+                setShowQRScanner(false);
+            };
+
+            const submitOrder = async () => {
+                if (!tentNumber.trim()) {
+                    setError('Пожалуйста, укажите номер палатки');
+                    return;
+                }
+
+                if (Object.keys(cart).length === 0) {
+                    setError('Корзина пуста');
+                    return;
+                }
+
+                setIsSubmitting(true);
+                setError('');
+
+                try {
+                    const orderItems = Object.entries(cart).map(([productId, quantity]) => ({
+                        product_id: parseInt(productId),
+                        quantity
+                    }));
+
+                    const response = await fetch(`${API_BASE}/orders`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            tent_number: tentNumber,
+                            items: orderItems,
+                            payment_method: paymentMethod
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        setSuccess(`Заказ создан! Номер заказа: ${data.id}`);
+                        // Redirect to payment
+                        window.open(data.payment_url, '_blank');
+                        
+                        // Reset form
+                        setCart({});
+                        setTentNumber('');
+                        fetchProducts();
+                    } else {
+                        if (data.error && data.error.includes('Недостаточно товара')) {
+                            setError('❌ ' + data.error + '\n\nПожалуйста, уменьшите количество товаров в корзине.');
+                        } else if (data.error && data.error.includes('не найден')) {
+                            setError('❌ ' + data.error);
+                        } else {
+                            setError('❌ ' + (data.error || 'Неизвестная ошибка при создании заказа'));
+                        }
+                    }
+                } catch (err) {
+                    setError('Ошибка сети. Проверьте подключение к интернету.');
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div className="app">
+                        <div className="container">
+                            <div className="loading">
+                                <div className="spinner"></div>
+                                <p>Загрузка товаров...</p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="app">
+                    <div className="container">
+                        <div className="header">
+                            <h1>EventTrade</h1>
+                            <p>Оформление заказа</p>
+                        </div>
+
+                        <div className="content">
+                            {error && (
+                                <div className="error-message">
+                                    {error}
+                                </div>
+                            )}
+
+                            {success && (
+                                <div className="success-message">
+                                    {success}
+                                </div>
+                            )}
+
+                            {/* Шаг 1: Номер палатки */}
+                            <div className="step">
+                                <div className="step-header">
+                                    <div className="step-number">1</div>
+                                    <div className="step-title">Укажите номер палатки</div>
+                                </div>
+                                <div className="form-group">
+                                    <label>Номер палатки</label>
+                                    <div className="tent-input-container">
+                                        <input
+                                            type="text"
+                                            value={tentNumber}
+                                            onChange={(e) => setTentNumber(e.target.value)}
+                                            placeholder="Например: A-01"
+                                        />
+                                        <button 
+                                            className="qr-scan-btn"
+                                            onClick={() => setShowQRScanner(true)}
+                                        >
+                                            QR
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Шаг 2: Выбор товаров */}
+                            <div className="step">
+                                <div className="step-header">
+                                    <div className="step-number">2</div>
+                                    <div className="step-title">Выберите товары</div>
+                                </div>
+                                
+                                {products.map(product => (
+                                    <div key={product.id} className="product-item">
+                                        <div className="product-header">
+                                            <div className="product-info">
+                                                <h3>{product.name}</h3>
+                                                <p>{product.description}</p>
+                                                <p>В наличии: {product.stock_quantity} шт.</p>
+                                            </div>
+                                            <div className="product-price">
+                                                {product.price} ₽
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="quantity-controls">
+                                            <button 
+                                                className="quantity-btn"
+                                                onClick={() => updateQuantity(product.id, -1)}
+                                            >
+                                                −
+                                            </button>
+                                            <div className="quantity-display">
+                                                {cart[product.id] || 0}
+                                            </div>
+                                            <button 
+                                                className="quantity-btn"
+                                                onClick={() => updateQuantity(product.id, 1)}
+                                                disabled={cart[product.id] >= product.stock_quantity}
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Сводка заказа */}
+                            {Object.keys(cart).length > 0 && (
+                                <div className="order-summary">
+                                    <h3>Ваш заказ:</h3>
+                                    {Object.entries(cart).map(([productId, quantity]) => {
+                                        const product = products.find(p => p.id === parseInt(productId));
+                                        return product ? (
+                                            <div key={productId} className="summary-row">
+                                                <span>{product.name} × {quantity}</span>
+                                                <span>{(product.price * quantity).toFixed(2)} ₽</span>
+                                            </div>
+                                        ) : null;
+                                    })}
+                                    <div className="summary-row summary-total">
+                                        <span>Итого:</span>
+                                        <span>{calculateTotal()} ₽</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Шаг 3: Способ оплаты */}
+                            {Object.keys(cart).length > 0 && (
+                                <div className="step">
+                                    <div className="step-header">
+                                        <div className="step-number">3</div>
+                                        <div className="step-title">Способ оплаты</div>
+                                    </div>
+                                    
+                                    <div className="payment-methods">
+                                        <div 
+                                            className={`payment-method ${paymentMethod === 'sbp' ? 'selected' : ''}`}
+                                            onClick={() => setPaymentMethod('sbp')}
+                                        >
+                                            <div>💳 СБП</div>
+                                            <small>Система быстрых платежей</small>
+                                        </div>
+                                        <div 
+                                            className={`payment-method ${paymentMethod === 'card' ? 'selected' : ''}`}
+                                            onClick={() => setPaymentMethod('card')}
+                                        >
+                                            <div>💰 Карта</div>
+                                            <small>Банковская карта</small>
+                                        </div>
+                                    </div>
+
+                                    <button 
+                                        className="submit-order"
+                                        onClick={submitOrder}
+                                        disabled={isSubmitting || !tentNumber.trim()}
+                                    >
+                                        {isSubmitting ? 'Создание заказа...' : `Заказать за ${calculateTotal()} ₽`}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* QR Scanner Modal */}
+                    {showQRScanner && (
+                        <QRScannerModal 
+                            onScan={handleQRScan}
+                            onClose={() => setShowQRScanner(false)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        function QRScannerModal({ onScan, onClose }) {
+            const [error, setError] = useState('');
+
+            useEffect(() => {
+                const demoScan = () => {
+                    setTimeout(() => {
+                        const demoTentNumbers = ['A-15', 'B-23', 'C-07', 'D-31'];
+                        const randomTent = demoTentNumbers[Math.floor(Math.random() * demoTentNumbers.length)];
+                        onScan(randomTent);
+                    }, 2000);
+                };
+
+                demoScan();
+            }, [onScan]);
+
+            return (
+                <div className="qr-scanner-modal">
+                    <div className="qr-scanner-content">
+                        <h3>Сканирование QR-кода палатки</h3>
+                        <div style={{ textAlign: 'center', padding: '20px' }}>
+                            <div className="spinner"></div>
+                            <p>Наведите камеру на QR-код палатки...</p>
+                        </div>
+                        {error && <div className="error-message">{error}</div>}
+                        <button className="btn" onClick={onClose} style={{ width: '100%', marginTop: '10px' }}>
+                            Отмена
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<OrderApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
